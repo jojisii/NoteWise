@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 
+
+// ВСТАВИТЬ GROQ КЛЮЧ СЮДА
 // https://console.groq.com
 const API_KEY = "gsk_your_key";
 
-const STORAGE_KEY = "notewise_notes";
 
+const STORAGE_KEY = "notewise_notes";
+ 
 const C = {
   bg:       "#130d1c",
   surface:  "#1e1530",
@@ -16,11 +19,11 @@ const C = {
   muted:    "#9b88b8",
   danger:   "#e88fa0",
 };
-
+ 
 function formatDate(ts) {
   return new Date(ts).toLocaleDateString("ru-RU");
 }
-
+ 
 const COMPETITORS = [
   { name: "✦ NoteWise (наш)", rag: "yes",     agent: "yes",     sources: "yes",     privacy: "yes",     price: "Бесплатно",  ease: "yes",     highlight: true  },
   { name: "Notion AI",         rag: "partial", agent: "yes",     sources: "no",      privacy: "partial", price: "$10/мес",    ease: "partial", highlight: false },
@@ -29,14 +32,14 @@ const COMPETITORS = [
   { name: "ChatGPT + файлы",   rag: "partial", agent: "yes",     sources: "no",      privacy: "no",      price: "$20/мес",    ease: "yes",     highlight: false },
   { name: "Apple Notes",       rag: "no",      agent: "no",      sources: "no",      privacy: "yes",     price: "Бесплатно",  ease: "yes",     highlight: false },
 ];
-
+ 
 const AUDIENCE = [
   { icon: "📚", title: "Студенты и аспиранты", desc: "Конспектируют лекции и хотят быстро синтезировать информацию перед экзаменом" },
   { icon: "💼", title: "Knowledge workers",    desc: "Менеджеры, аналитики, консультанты — накапливают рабочие знания и быстро к ним обращаются" },
   { icon: "🔬", title: "Исследователи",        desc: "Ведут заметки по статьям и экспериментам, задают вопросы по накопленной базе знаний" },
   { icon: "✍️", title: "Авторы и журналисты",  desc: "Хранят идеи, черновики, источники и используют AI для структурирования материала" },
 ];
-
+ 
 function Badge({ val }) {
   const map = {
     yes:     { bg: "rgba(168,216,176,0.15)", color: "#a8d8b0", label: "Да" },
@@ -50,7 +53,7 @@ function Badge({ val }) {
     </span>
   );
 }
-
+ 
 export default function App() {
   const [page, setPage]               = useState("notes");
   const [notes, setNotes]             = useState([]);
@@ -60,55 +63,81 @@ export default function App() {
   const [input, setInput]             = useState("");
   const [thinking, setThinking]       = useState(false);
   const [hoveredNote, setHoveredNote] = useState(null);
+  const [editId, setEditId]           = useState(null); // id заметки которую редактируем
   const chatEndRef = useRef(null);
-
+ 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) setNotes(JSON.parse(saved));
     } catch (e) {}
   }, []);
-
+ 
   useEffect(() => {
     if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [messages, thinking]);
-
+ 
   function saveNote() {
     if (!form.title.trim() || !form.body.trim()) return;
-    const note = {
-      id:    Date.now(),
-      title: form.title.trim(),
-      body:  form.body.trim(),
-      tag:   form.tag.trim() || "общее",
-      date:  formatDate(Date.now()),
-    };
-    const next = [note, ...notes];
+    let next;
+    if (editId) {
+      // Редактирование существующей заметки
+      next = notes.map(n => n.id === editId
+        ? { ...n, title: form.title.trim(), body: form.body.trim(), tag: form.tag.trim() || "общее" }
+        : n
+      );
+    } else {
+      // Создание новой заметки
+      const note = {
+        id:    Date.now(),
+        title: form.title.trim(),
+        body:  form.body.trim(),
+        tag:   form.tag.trim() || "общее",
+        date:  formatDate(Date.now()),
+      };
+      next = [note, ...notes];
+    }
     setNotes(next);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     setShowModal(false);
+    setEditId(null);
     setForm({ title: "", tag: "", body: "" });
   }
-
+ 
+  function openEditModal(n) {
+    setEditId(n.id);
+    setForm({ title: n.title, tag: n.tag, body: n.body });
+    setShowModal(true);
+  }
+ 
+  function openNewModal() {
+    setEditId(null);
+    setForm({ title: "", tag: "", body: "" });
+    setShowModal(true);
+  }
+ 
   function deleteNote(id) {
     const next = notes.filter(n => n.id !== id);
     setNotes(next);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   }
-
+ 
   async function sendMsg() {
     if (thinking || !input.trim()) return;
     const q = input.trim();
     setInput("");
     setMessages(m => [...m, { role: "user", content: q }]);
     setThinking(true);
-
+ 
     try {
       const ctx = notes.length > 0
         ? notes.map((n, i) => `[Заметка ${i + 1}: "${n.title}" (тег: ${n.tag})]\n${n.body}`).join("\n\n---\n\n")
         : "Заметок нет.";
-
+ 
       const systemPrompt =
-        `Ты очень умный персональный AI-ассистент. Вот заметки пользователя:\n\n${ctx}\n\n` +
+        `Ты умный персональный AI-ассистент.\n` +
+        `Сегодняшняя дата: ${new Date().toLocaleDateString("ru-RU", {day:"numeric",month:"long",year:"numeric",weekday:"long"})}.\n` +
+        `Вот заметки пользователя:\n\n${ctx}\n\n` +
         `СТРОГИЕ ПРАВИЛА:\n` +
         `1. Используй заметки как основной контекст для ответа.\n` +
         `2. Применяй свои знания для полезного развёрнутого ответа.\n` +
@@ -118,7 +147,7 @@ export default function App() {
         `6. В самом конце ответа ОБЯЗАТЕЛЬНО напиши строку в точно таком формате:\n` +
         `SOURCES:["название заметки 1","название заметки 2"]\n` +
         `Перечисли ВСЕ заметки которые использовал — их может быть несколько. Не пропускай эту строку.`;
-
+ 
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -134,15 +163,15 @@ export default function App() {
           ],
         }),
       });
-
+ 
       const data = await response.json();
-
+ 
       if (data.error) {
         setMessages(prev => [...prev, { role: "ai", content: "Ошибка Groq: " + data.error.message }]);
         setThinking(false);
         return;
       }
-
+ 
       const raw  = data.choices?.[0]?.message?.content || "Нет ответа.";
       let text   = raw;
       let sources = [];
@@ -152,7 +181,7 @@ export default function App() {
         try { sources = JSON.parse("[" + match[1] + "]"); } catch (e) {}
       }
       setMessages(prev => [...prev, { role: "ai", content: text, sources }]);
-
+ 
     } catch (e) {
       setMessages(prev => [...prev, {
         role: "ai",
@@ -161,7 +190,7 @@ export default function App() {
     }
     setThinking(false);
   }
-
+ 
   const S = {
     app:        { display: "flex", height: "100vh", fontFamily: "'Segoe UI', sans-serif", background: C.bg, color: C.text, overflow: "hidden" },
     sidebar:    { width: 215, minWidth: 215, background: C.surface, borderRight: "1px solid " + C.border, display: "flex", flexDirection: "column" },
@@ -193,10 +222,10 @@ export default function App() {
     sectionLbl: { fontSize: 10, color: C.pink, letterSpacing: 2, textTransform: "uppercase", fontFamily: "monospace", marginBottom: 8 },
     auCard:     { background: C.surface, border: "1px solid " + C.border, borderRadius: 12, padding: 16 },
   };
-
+ 
   return (
     <div style={S.app}>
-
+ 
       {/* SIDEBAR */}
       <div style={S.sidebar}>
         <div style={S.logo}>
@@ -217,19 +246,19 @@ export default function App() {
           ))}
         </nav>
         <div style={S.sideBottom}>
-          <button style={S.navBtn(false)} onClick={() => setShowModal(true)}>
+          <button style={S.navBtn(false)} onClick={() => openNewModal()}>
             <span style={{ fontSize:15, color:C.pink }}>✦</span> Новая заметка
           </button>
         </div>
       </div>
-
+ 
       {/* MAIN */}
       <div style={S.main}>
         <div style={S.topbar}>
           <span style={S.pageTitle}>{page==="notes"?"ЗАМЕТКИ":page==="chat"?"AI АГЕНТ":"АНАЛИТИКА"}</span>
-          {page==="notes" && <button style={S.btnPrimary} onClick={() => setShowModal(true)}>+ Добавить</button>}
+          {page==="notes" && <button style={S.btnPrimary} onClick={() => openNewModal()}>+ Добавить</button>}
         </div>
-
+ 
         {/* ЗАМЕТКИ */}
         {page==="notes" && (
           <div style={S.content}>
@@ -238,7 +267,7 @@ export default function App() {
                 <div style={{ fontSize:44, marginBottom:14 }}>◈</div>
                 <div style={{ fontSize:18, fontWeight:600, color:C.text, marginBottom:8 }}>Пока нет заметок</div>
                 <div style={{ fontSize:13, lineHeight:1.6 }}>Создайте первую заметку — AI агент будет<br/>отвечать на вопросы на её основе</div>
-                <button style={{ ...S.btnPrimary, marginTop:20, padding:"10px 22px", fontSize:13 }} onClick={() => setShowModal(true)}>
+                <button style={{ ...S.btnPrimary, marginTop:20, padding:"10px 22px", fontSize:13 }} onClick={() => openNewModal()}>
                   Создать заметку
                 </button>
               </div>
@@ -252,6 +281,11 @@ export default function App() {
                       style={{ position:"absolute", top:10, right:10, background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:13, padding:"2px 6px" }}>
                       ✕
                     </button>
+                    <button onClick={() => openEditModal(n)}
+                      title="Редактировать"
+                      style={{ position:"absolute", bottom:12, right:12, background:"rgba(196,160,240,0.18)", border:"1px solid rgba(196,160,240,0.35)", color:C.lavender, cursor:"pointer", fontSize:11, padding:"3px 10px", borderRadius:6, fontFamily:"'Segoe UI',sans-serif", fontWeight:600, letterSpacing:0.3 }}>
+                      ✎ изменить
+                    </button>
                     <div style={S.noteDate}>{n.date}</div>
                     <div style={S.noteTitle}>{n.title}</div>
                     <div style={S.notePreview}>{n.body}</div>
@@ -262,7 +296,7 @@ export default function App() {
             )}
           </div>
         )}
-
+ 
         {/* ЧАТ */}
         {page==="chat" && (
           <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
@@ -317,7 +351,7 @@ export default function App() {
             </div>
           </div>
         )}
-
+ 
         {/* АНАЛИТИКА */}
         {page==="analytics" && (
           <div style={{ ...S.content, maxWidth:900 }}>
@@ -326,7 +360,7 @@ export default function App() {
             <div style={{ fontSize:13, color:C.muted, lineHeight:1.7, marginBottom:28 }}>
               Приложение позволяет создавать заметки и задавать вопросы AI агенту, который формирует ответы на основе сохранённых заметок (RAG — Retrieval-Augmented Generation). Никаких галлюцинаций — только ваши знания, усиленные интеллектом.
             </div>
-
+ 
             <div style={{ ...S.sectionLbl, marginBottom:12 }}>Целевая аудитория</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:14, marginBottom:32 }}>
               {AUDIENCE.map((a,i) => (
@@ -337,7 +371,7 @@ export default function App() {
                 </div>
               ))}
             </div>
-
+ 
             <div style={{ ...S.sectionLbl, marginBottom:12 }}>Сравнительный анализ конкурентов</div>
             <div style={{ overflowX:"auto", marginBottom:32 }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12.5 }}>
@@ -364,7 +398,7 @@ export default function App() {
                 </tbody>
               </table>
             </div>
-
+ 
             <div style={{ ...S.sectionLbl, marginBottom:12 }}>Технологический стек</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:14 }}>
               {[
@@ -383,12 +417,12 @@ export default function App() {
           </div>
         )}
       </div>
-
+ 
       {/* МОДАЛКА */}
       {showModal && (
         <div style={S.overlay} onClick={e => { if(e.target===e.currentTarget) setShowModal(false); }}>
           <div style={S.modal}>
-            <div style={{ fontSize:20, fontWeight:700, color:C.pink, marginBottom:20 }}>Новая заметка</div>
+            <div style={{ fontSize:20, fontWeight:700, color:C.pink, marginBottom:20 }}>{editId ? "✎ Редактировать заметку" : "✦ Новая заметка"}</div>
             <div style={{ marginBottom:16 }}>
               <label style={S.label}>Заголовок</label>
               <input style={S.inp} value={form.title} onChange={e => setForm(f=>({...f,title:e.target.value}))} placeholder="Название заметки..." />
@@ -411,7 +445,7 @@ export default function App() {
           </div>
         </div>
       )}
-
+ 
       <style>{`@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-7px)}}`}</style>
     </div>
   );
