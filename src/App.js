@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 // https://console.groq.com
-const API_KEY = "gsk_ваш_ключ";
+const API_KEY = "gsk_your_key";
 
 const STORAGE_KEY = "notewise_notes";
 
@@ -108,7 +108,7 @@ export default function App() {
         : "Заметок нет.";
 
       const systemPrompt =
-        `Ты умный персональный AI-ассистент. Вот заметки пользователя:\n\n${ctx}\n\n` +
+        `Ты очень умный персональный AI-ассистент. Вот заметки пользователя:\n\n${ctx}\n\n` +
         `СТРОГИЕ ПРАВИЛА:\n` +
         `1. Используй заметки как основной контекст для ответа.\n` +
         `2. Применяй свои знания для полезного развёрнутого ответа.\n` +
